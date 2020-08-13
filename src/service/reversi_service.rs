@@ -102,7 +102,7 @@ pub fn save(state: &ReversiState) -> Result<(), ReversiError> {
 
 pub fn load() -> Result<ReversiState, ReversiError> {
 	// ファイル読み込みに成功していればゲーム状態を復元する。
-    fn restore_state(state: &mut ReversiState, undo_list: Vec<Move>, redo_list: Vec<Move>) -> Result<(), ReversiError> {
+    fn restore_state(undo_list: Vec<Move>, redo_list: Vec<Move>) -> Result<ReversiState, Box<dyn std::error::Error>> {
         fn do_one_move(state: &mut ReversiState, mv: &Move) -> Result<(), ReversiError> {
             // 順番を決めて
             state.turn = mv.turn;
@@ -128,26 +128,24 @@ pub fn load() -> Result<ReversiState, ReversiError> {
 
             Ok(())
         }
+
+        let mut state = ReversiState::new();
+
         for mv in &undo_list {
-            do_one_move(state, &mv)?;
+            do_one_move(&mut state, &mv)?;
         }
         for mv in &redo_list {
-            do_one_move(state, &mv)?;
+            do_one_move(&mut state, &mv)?;
         }
         for _ in 0..redo_list.len() {
             state.undo()?;
         }
 
-        Ok(())
+        Ok(state)
     }
 
-    match fileio::read_file() {
-        Ok((undo_list, redo_list)) => {
-            let mut new_state = ReversiState::new();
-            restore_state(&mut new_state, undo_list, redo_list)?;
-            Ok(new_state)
-        },
-        Err(e) => Err(ReversiError::new(format!("{}", e))),
-    }
+    fileio::read_file()
+        .and_then(|(undo_list, redo_list)| restore_state(undo_list, redo_list) )
+        .or_else(|e| Err( ReversiError::new(format!("{}", e) )))
 
 }
